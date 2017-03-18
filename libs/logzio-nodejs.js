@@ -2,8 +2,9 @@ var request = require('request');
 var stringifySafe = require('json-stringify-safe');
 var _assign = require('lodash.assign');
 var dgram = require('dgram');
+var callback = require("request/request.js").callback;
 
-exports.version = require('../package.json').version;
+//exports.version = require('../package.json').version;
 
 var LogzioLogger = function (options) {
   if (!options || !options.token) {
@@ -212,7 +213,7 @@ LogzioLogger.prototype._send = function(bulk) {
   }
 
   var body = this._messagesToBody(bulk.msgs);
-  mythis._debug('Request body = ' + body)
+  mythis._debug('Request body = ' + body);
   var options = {
     uri: this.url,
     body: body,

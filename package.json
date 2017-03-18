@@ -23,7 +23,9 @@
     "moment": "2.11.2",
     "useragent": "2.1.6",
     "webtask-tools": "^1.3.0",
-    "request": "^2.56.0"
+    "json-stringify-safe": "5.0.x",
+    "lodash.assign": "4.2.0",
+    "request": "2.75.0"
   },
   "devDependencies": {
     "babel-core": "^6.5.1",
