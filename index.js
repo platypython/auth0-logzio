@@ -26,7 +26,8 @@ function lastLogCheckpoint(req, res) {
     const logzio = Logzio.createLogger({
       token: ctx.data.LOGZIO_API_TOKEN,
       type: ctx.data.LOGZIO_LOG_TYPE,
-      protocol: ctx.data.LOGZIO_PROTOCOL
+      protocol: ctx.data.LOGZIO_PROTOCOL,
+      debug: true
     });
 
     // Start the process.
