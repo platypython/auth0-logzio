@@ -8,6 +8,19 @@ const app = express();
 const Request = require('request');
 const memoizer = require('lru-memoizer');
 
+function jsonToNdjson(object) {
+  let nd_object = "";
+  let prefix = "";
+  for (item in object) {
+    if (item > 0) {
+      prefix = "\\n"
+    }
+    nd_object += prefix + JSON.stringify(object[item]);
+  }
+  return nd_object;
+
+}
+
 function lastLogCheckpoint(req, res) {
   let ctx = req.webtaskContext;
   let required_settings = ['AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET', 'LOGZIO_API_TOKEN', 'LOGZIO_LOG_TYPE', 'LOGZIO_PROTOCOL'];
@@ -84,7 +97,8 @@ function lastLogCheckpoint(req, res) {
         console.log(`Sending ${context.logs.length}`);
 
         // logzio
-        logzio.log(context.logs, (err) => {
+        let ndlogs = jsonToNdjson(context.logs);
+        logzio.log(ndlogs, (err) => {
           if (err) {
             console.log('Error sending logs to LogZio', err);
             return callback(err);

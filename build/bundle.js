@@ -61,6 +61,18 @@ module.exports =
 	var Request = __webpack_require__(2);
 	var memoizer = __webpack_require__(12);
 
+	function jsonToNdjson(object) {
+	  var nd_object = "";
+	  var prefix = "";
+	  for (item in object) {
+	    if (item > 0) {
+	      prefix = "\\n";
+	    }
+	    nd_object += prefix + JSON.stringify(object[item]);
+	  }
+	  return nd_object;
+	}
+
 	function lastLogCheckpoint(req, res) {
 	  var ctx = req.webtaskContext;
 	  var required_settings = ['AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET', 'LOGZIO_API_TOKEN', 'LOGZIO_LOG_TYPE', 'LOGZIO_PROTOCOL'];
@@ -137,7 +149,8 @@ module.exports =
 	      console.log('Sending ' + context.logs.length);
 
 	      // logzio
-	      logzio.log(context.logs, function (err) {
+	      var ndlogs = jsonToNdjson(context.logs);
+	      logzio.log(ndlogs, function (err) {
 	        if (err) {
 	          console.log('Error sending logs to LogZio', err);
 	          return callback(err);
