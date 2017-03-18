@@ -35,9 +35,9 @@
       "type": "select",
       "allowMultiple": false,
       "options": [
-        {"value": "-", "text": "http"},
-        {"value": "0", "text": "https"},
-        {"value": "1", "text": "udp"}
+        {"value": "http", "text": "http"},
+        {"value": "https", "text": "https"},
+        {"value": "udp", "text": "udp"}
       ]
     },
     "LOG_LEVEL":     {
