@@ -19,7 +19,6 @@
   "dependencies": {
     "async": "1.0.0",
     "express": "4.14.0",
-    "logzio-nodejs": "0.4.2",
     "lru-memoizer": "^1.2.0",
     "moment": "2.11.2",
     "useragent": "2.1.6",

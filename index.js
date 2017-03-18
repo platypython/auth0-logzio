@@ -1,4 +1,4 @@
-const Logzio = require('logzio-nodejs');
+const Logzio = require('.libs/logzio-nodejs.js');
 const async = require('async');
 const moment = require('moment');
 const useragent = require('useragent');
@@ -8,18 +8,6 @@ const app = express();
 const Request = require('request');
 const memoizer = require('lru-memoizer');
 
-function jsonToNdjson(object) {
-  let nd_object = "";
-  let prefix = "";
-  for (item in object) {
-    if (item > 0) {
-      prefix = "\\n"
-    }
-    nd_object += prefix + JSON.stringify(object[item]);
-  }
-  return nd_object;
-
-}
 
 function lastLogCheckpoint(req, res) {
   let ctx = req.webtaskContext;
