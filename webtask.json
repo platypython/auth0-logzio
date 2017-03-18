@@ -6,7 +6,7 @@
   "description": "This extension will take all of your Auth0 logs and export them to LogZio",
   "type": "cron",
   "repository": "https://github.com/platypython/auth0-logz",
-  "logoUrl": "",
+  "logoUrl": "http://media.moddb.com/images/articles/1/150/149839/nukesymbol02.jpg",
   "keywords": [
     "auth0",
     "extension",
