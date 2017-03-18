@@ -85,8 +85,7 @@ function lastLogCheckpoint(req, res) {
         console.log(`Sending ${context.logs.length}`);
 
         // logzio
-        let ndlogs = jsonToNdjson(context.logs);
-        logzio.log(ndlogs, (err) => {
+        logzio.log(context.logs, (err) => {
           if (err) {
             console.log('Error sending logs to LogZio', err);
             return callback(err);
