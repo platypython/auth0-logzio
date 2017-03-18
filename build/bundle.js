@@ -61,18 +61,6 @@ module.exports =
 	var Request = __webpack_require__(2);
 	var memoizer = __webpack_require__(12);
 
-	function jsonToNdjson(object) {
-	  var nd_object = "";
-	  var prefix = "";
-	  for (item in object) {
-	    if (item > 0) {
-	      prefix = "\\n";
-	    }
-	    nd_object += prefix + JSON.stringify(object[item]);
-	  }
-	  return nd_object;
-	}
-
 	function lastLogCheckpoint(req, res) {
 	  var ctx = req.webtaskContext;
 	  var required_settings = ['AUTH0_DOMAIN', 'AUTH0_CLIENT_ID', 'AUTH0_CLIENT_SECRET', 'LOGZIO_API_TOKEN', 'LOGZIO_LOG_TYPE', 'LOGZIO_PROTOCOL'];
@@ -92,7 +80,8 @@ module.exports =
 	    var logzio = Logzio.createLogger({
 	      token: ctx.data.LOGZIO_API_TOKEN,
 	      type: ctx.data.LOGZIO_LOG_TYPE,
-	      protocol: ctx.data.LOGZIO_PROTOCOL
+	      protocol: ctx.data.LOGZIO_PROTOCOL,
+	      debug: true
 	    });
 
 	    // Start the process.
@@ -149,8 +138,7 @@ module.exports =
 	      console.log('Sending ' + context.logs.length);
 
 	      // logzio
-	      var ndlogs = jsonToNdjson(context.logs);
-	      logzio.log(ndlogs, function (err) {
+	      logzio.log(context.logs, function (err) {
 	        if (err) {
 	          console.log('Error sending logs to LogZio', err);
 	          return callback(err);
@@ -459,6 +447,8 @@ module.exports =
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
+	'use strict';
+
 	var request = __webpack_require__(2);
 	var stringifySafe = __webpack_require__(3);
 	var _assign = __webpack_require__(4);
@@ -466,266 +456,259 @@ module.exports =
 
 	exports.version = __webpack_require__(6).version;
 
-	var LogzioLogger = function (options) {
-	    if (!options || !options.token) {
-	        throw new Error('You are required to supply a token for logging.');
-	    }
+	var LogzioLogger = function LogzioLogger(options) {
+	  if (!options || !options.token) {
+	    throw new Error('You are required to supply a token for logging.');
+	  }
 
-	    this.token = options.token;
-	    this.host = options.host || 'listener.logz.io';
-	    this.userAgent = 'Logzio-Logger NodeJS';
-	    this.type = options.type || 'nodejs';
-	    this.sendIntervalMs = options.sendIntervalMs || 10 * 1000;
-	    this.bufferSize = options.bufferSize || 100;
-	    this.debug = options.debug || false;
-	    this.numberOfRetries = options.numberOfRetries || 3;
-	    this.timer = null;
-	    this.closed = false;
-	    this.supressErrors = options.supressErrors || false;
-	    this.addTimestampWithNanoSecs = options.addTimestampWithNanoSecs || false;
+	  this.token = options.token;
+	  this.host = options.host || 'listener.logz.io';
+	  this.userAgent = 'Logzio-Logger NodeJS';
+	  this.type = options.type || 'nodejs';
+	  this.sendIntervalMs = options.sendIntervalMs || 10 * 1000;
+	  this.bufferSize = options.bufferSize || 100;
+	  this.debug = options.debug || false;
+	  this.numberOfRetries = options.numberOfRetries || 3;
+	  this.timer = null;
+	  this.closed = false;
+	  this.supressErrors = options.supressErrors || false;
+	  this.addTimestampWithNanoSecs = options.addTimestampWithNanoSecs || false;
 
-	    var protocolToPortMap = {
-	        'udp': 5050,
-	        'http': 8070,
-	        'https': 8071
-	    };
-	    this.protocol = options.protocol || 'http';
-	    if (!protocolToPortMap.hasOwnProperty(this.protocol)) {
-	        throw new Error('Invalid protocol defined. Valid options are : ' + JSON.stringify(Object.keys(protocolToPortMap)));
-	    }
-	    this.port = protocolToPortMap[this.protocol];
+	  var protocolToPortMap = {
+	    'udp': 5050,
+	    'http': 8070,
+	    'https': 8071
+	  };
+	  this.protocol = options.protocol || 'http';
+	  if (!protocolToPortMap.hasOwnProperty(this.protocol)) {
+	    throw new Error('Invalid protocol defined. Valid options are : ' + JSON.stringify(Object.keys(protocolToPortMap)));
+	  }
+	  this.port = protocolToPortMap[this.protocol];
 
-	    if (this.protocol === 'udp') {
-	        this.udpClient = dgram.createSocket('udp4');
-	    }
+	  if (this.protocol === 'udp') {
+	    this.udpClient = dgram.createSocket('udp4');
+	  }
 
-	    /*
-	      Callback method executed on each bulk of messages sent to logzio.
-	      If the bulk failed, it will be called: callback(exception), otherwise upon
-	      success it will called as callback()
-	    */
-	    this.callback = options.callback || this._defaultCallback;
+	  /*
+	   Callback method executed on each bulk of messages sent to logzio.
+	   If the bulk failed, it will be called: callback(exception), otherwise upon
+	   success it will called as callback()
+	   */
+	  this.callback = options.callback || this._defaultCallback;
 
-	    /*
-	     * the read/write/connection timeout in milliseconds of the outgoing HTTP request
-	     */
-	    this.timeout = options.timeout;
+	  /*
+	   * the read/write/connection timeout in milliseconds of the outgoing HTTP request
+	   */
+	  this.timeout = options.timeout;
 
-	    // build the url for logging
-	    this.url = this.protocol + '://' + this.host + ':' + this.port + '?token=' + this.token;
+	  // build the url for logging
+	  this.url = this.protocol + '://' + this.host + ':' + this.port + '?token=' + this.token;
 
-	    this.messages = [];
-	    this.bulkId = 1;
-	    this.extraFields = options.extraFields || {};
+	  this.messages = [];
+	  this.bulkId = 1;
+	  this.extraFields = options.extraFields || {};
 	};
 
 	exports.createLogger = function (options) {
-	    var l = new LogzioLogger(options);
-	    l._timerSend();
-	    return l;
+	  var l = new LogzioLogger(options);
+	  l._timerSend();
+	  return l;
 	};
 
-	var jsonToString = exports.jsonToString = function(json) {
-	    try {
-	        return JSON.stringify(json);
-	    }
-	    catch(ex) {
-	        return stringifySafe(json, null, null, function() { });
-	    }
+	var jsonToString = exports.jsonToString = function (json) {
+	  try {
+	    return JSON.stringify(json);
+	  } catch (ex) {
+	    return stringifySafe(json, null, null, function () {});
+	  }
 	};
 
-	LogzioLogger.prototype._defaultCallback = function(err) {
-	    if (err && !this.supressErrors) {
-	        console.error('logzio-logger error: ' + err, err);
-	    }
+	LogzioLogger.prototype._defaultCallback = function (err) {
+	  if (err && !this.supressErrors) {
+	    console.error('logzio-logger error: ' + err, err);
+	  }
 	};
 
-	LogzioLogger.prototype.sendAndClose = function(callback){
-	    this.callback = callback || this._defaultCallback;
-	    this._debug("Sending last messages and closing...");
+	LogzioLogger.prototype.sendAndClose = function (callback) {
+	  this.callback = callback || this._defaultCallback;
+	  this._debug("Sending last messages and closing...");
+	  this._popMsgsAndSend();
+	  clearTimeout(this.timer);
+
+	  if (this.protocol === 'udp') {
+	    this.udpClient.close();
+	  }
+	};
+
+	LogzioLogger.prototype._timerSend = function () {
+	  if (this.messages.length > 0) {
+	    this._debug('Woke up and saw ' + this.messages.length + ' messages to send. Sending now...');
 	    this._popMsgsAndSend();
-	    clearTimeout(this.timer);
+	  }
 
-	    if (this.protocol === 'udp') {
-	        this.udpClient.close();
-	    }
+	  var mythis = this;
+	  this.timer = setTimeout(function () {
+	    mythis._timerSend();
+	  }, this.sendIntervalMs);
 	};
 
-	LogzioLogger.prototype._timerSend = function() {
-	    if (this.messages.length > 0) {
-	        this._debug('Woke up and saw ' + this.messages.length + ' messages to send. Sending now...');
-	        this._popMsgsAndSend();
+	LogzioLogger.prototype._sendMessagesUDP = function () {
+	  var messagesLength = this.messages.length;
+
+	  var udpSentCallback = function udpSentCallback(err, bytes) {
+	    if (err) {
+	      this._debug('Error while sending udp packets. err = ' + err);
+	      callback(new Error('Failed to send udp log message. err = ' + err));
 	    }
+	  };
 
-	    var mythis = this;
-	    this.timer = setTimeout(function() {
-	        mythis._timerSend();
-	    }, this.sendIntervalMs);
-	};
+	  for (var i = 0; i < messagesLength; i++) {
 
-	LogzioLogger.prototype._sendMessagesUDP = function() {
-	    var messagesLength = this.messages.length;
+	    var msg = this.messages[i];
+	    msg.token = this.token;
+	    var buff = new Buffer(stringifySafe(msg));
 
-	    var udpSentCallback = function(err, bytes) {
-	        if (err) {
-	            this._debug('Error while sending udp packets. err = ' + err);
-	            callback(new Error('Failed to send udp log message. err = ' + err));
-	        }
-	    };
-
-	    for (var i=0; i<messagesLength; i++) {
-
-	        var msg = this.messages[i];
-	        msg.token = this.token;
-	        var buff = new Buffer(stringifySafe(msg));
-
-	        this._debug('Starting to send messages via udp.');
-	        this.udpClient.send(buff, 0, buff.length, this.port, this.host, udpSentCallback);
-	    }
+	    this._debug('Starting to send messages via udp.');
+	    this.udpClient.send(buff, 0, buff.length, this.port, this.host, udpSentCallback);
+	  }
 	};
 
 	LogzioLogger.prototype.close = function () {
-	    // clearing the timer allows the node event loop to quit when needed
-	    clearTimeout(this.timer);
-	    if (this.protocol === 'udp') {
-	        this.udpClient.close();
-	    }
+	  // clearing the timer allows the node event loop to quit when needed
+	  clearTimeout(this.timer);
+	  if (this.protocol === 'udp') {
+	    this.udpClient.close();
+	  }
 
-	    // send pending messages, if any
-	    if (this.messages.length > 0) {
-	        this._debug("Closing, purging messages.");
-	        this._popMsgsAndSend();
-	    }
+	  // send pending messages, if any
+	  if (this.messages.length > 0) {
+	    this._debug("Closing, purging messages.");
+	    this._popMsgsAndSend();
+	  }
 
-	    // no more logging allowed
-	    this.closed = true;
+	  // no more logging allowed
+	  this.closed = true;
 	};
 
-	LogzioLogger.prototype.log = function(msg) {
-	    if (this.closed === true) {
-	        throw new Error('Logging into a logger that has been closed!');
-	    }
-	    if (typeof msg === 'string') {
-	        msg = { message: msg };
-	        if (this.type) msg.type = this.type;
-	    }
-	    msg = _assign(msg, this.extraFields);
-	    msg.type = this.type;
+	LogzioLogger.prototype.log = function (msg) {
+	  if (this.closed === true) {
+	    throw new Error('Logging into a logger that has been closed!');
+	  }
+	  if (typeof msg === 'string') {
+	    msg = { message: msg };
+	    if (this.type) msg.type = this.type;
+	  }
+	  msg = _assign(msg, this.extraFields);
+	  msg.type = this.type;
 
-	    if (this.addTimestampWithNanoSecs) {
-	        var time = process.hrtime();
-	        var now = (new Date()).toISOString();
-	        msg['@timestamp_nano'] = [now, time[0].toString(), time[1].toString()].join('-');
-	    }
+	  if (this.addTimestampWithNanoSecs) {
+	    var time = process.hrtime();
+	    var now = new Date().toISOString();
+	    msg['@timestamp_nano'] = [now, time[0].toString(), time[1].toString()].join('-');
+	  }
 
-	    this.messages.push(msg);
-	    if (this.messages.length >= this.bufferSize) {
-	        this._debug('Buffer is full - sending bulk');
-	        this._popMsgsAndSend();
-	    }
+	  this.messages.push(msg);
+	  if (this.messages.length >= this.bufferSize) {
+	    this._debug('Buffer is full - sending bulk');
+	    this._popMsgsAndSend();
+	  }
 	};
 
-	LogzioLogger.prototype._popMsgsAndSend = function() {
-	    
-	    if (this.protocol === 'udp') {
-	        this._debug('Sending messages via udp');
-	        this._sendMessagesUDP();
-	    }
-	    else {
-	        var bulk = this._createBulk(this.messages);
-	        this._debug('Sending bulk #' + bulk.id);
-	        this._send(bulk);
-	    }
+	LogzioLogger.prototype._popMsgsAndSend = function () {
 
-	    this.messages = [];
+	  if (this.protocol === 'udp') {
+	    this._debug('Sending messages via udp');
+	    this._sendMessagesUDP();
+	  } else {
+	    var bulk = this._createBulk(this.messages);
+	    this._debug('Sending bulk #' + bulk.id);
+	    this._send(bulk);
+	  }
+
+	  this.messages = [];
 	};
 
-	LogzioLogger.prototype._createBulk = function(msgs) {
-	    var bulk = {};
-	    // creates a new copy of the array. Objects references are copied (no deep copy)
-	    bulk.msgs = msgs.slice();
-	    bulk.attemptNumber = 1;
-	    bulk.sleepUntilNextRetry = 2*1000;
-	    bulk.id = this.bulkId++;
+	LogzioLogger.prototype._createBulk = function (msgs) {
+	  var bulk = {};
+	  // creates a new copy of the array. Objects references are copied (no deep copy)
+	  bulk.msgs = msgs.slice();
+	  bulk.attemptNumber = 1;
+	  bulk.sleepUntilNextRetry = 2 * 1000;
+	  bulk.id = this.bulkId++;
 
-	    return bulk;
+	  return bulk;
 	};
 
-	LogzioLogger.prototype._messagesToBody = function(msgs) {
-	    var body = '';
-	    for (var i = 0; i < msgs.length; i++) {
-	        body = body + jsonToString(msgs[i]) + '\n';
+	LogzioLogger.prototype._messagesToBody = function (msgs) {
+	  var body = '';
+	  for (var i = 0; i < msgs.length; i++) {
+	    body = body + jsonToString(msgs[i]) + '\n';
+	  }
+	  return body;
+	};
+
+	LogzioLogger.prototype._debug = function (msg) {
+	  if (this.debug) console.log('logzio-nodejs: ' + msg);
+	};
+
+	LogzioLogger.prototype._send = function (bulk) {
+	  var mythis = this;
+	  function tryAgainIn(sleepTimeMs) {
+	    mythis._debug('Bulk #' + bulk.id + ' - Trying again in ' + sleepTimeMs + '[ms], attempt no. ' + bulk.attemptNumber);
+	    setTimeout(function () {
+	      mythis._send(bulk);
+	    }, sleepTimeMs);
+	  }
+
+	  var body = this._messagesToBody(bulk.msgs);
+	  mythis._debug('Request body = ' + body);
+	  var options = {
+	    uri: this.url,
+	    body: body,
+	    headers: {
+	      'host': this.host,
+	      'accept': '*/*',
+	      'user-agent': this.userAgent,
+	      'content-type': 'text/plain',
+	      'content-length': Buffer.byteLength(body)
 	    }
-	    return body;
-	};
+	  };
+	  if (typeof this.timeout !== 'undefined') {
+	    options.timeout = this.timeout;
+	  }
 
-	LogzioLogger.prototype._debug = function(msg) {
-	    if (this.debug) console.log('logzio-nodejs: ' + msg);
-	};
-
-	LogzioLogger.prototype._send = function(bulk) {
-	    var mythis = this;
-	    function tryAgainIn(sleepTimeMs) {
-	        mythis._debug('Bulk #' + bulk.id + ' - Trying again in ' + sleepTimeMs + '[ms], attempt no. ' + bulk.attemptNumber);
-	        setTimeout(function() {
-	            mythis._send(bulk);
-	        }, sleepTimeMs);
-	    }
-
-	    var body = this._messagesToBody(bulk.msgs);
-	    var options = {
-	        uri: this.url,
-	        body: body,
-	        headers: {
-	            'host': this.host,
-	            'accept': '*/*',
-	            'user-agent': this.userAgent,
-	            'content-type': 'text/plain',
-	            'content-length': Buffer.byteLength(body)
+	  var callback = this.callback;
+	  try {
+	    request.post(options, function (err, res, body) {
+	      if (err) {
+	        // In rare cases server is busy
+	        if (err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET' || err.code === 'ESOCKETTIMEDOUT' || err.code === 'ECONNABORTED') {
+	          if (bulk.attemptNumber >= mythis.numberOfRetries) {
+	            callback(new Error('Failed after ' + bulk.attemptNumber + ' retries on error = ' + err, err));
+	          } else {
+	            mythis._debug('Bulk #' + bulk.id + ' - failed on error: ' + err);
+	            var sleepTimeMs = bulk.sleepUntilNextRetry;
+	            bulk.sleepUntilNextRetry = bulk.sleepUntilNextRetry * 2;
+	            bulk.attemptNumber++;
+	            tryAgainIn(sleepTimeMs);
+	          }
+	        } else {
+	          callback(err);
 	        }
-	    };
-	    if (typeof this.timeout !== 'undefined') {
-	        options.timeout = this.timeout;
-	    }
-
-	    var callback = this.callback;
-	    try {
-	        request.post(options, function (err, res, body) {
-	            if (err) {
-	                // In rare cases server is busy
-	                if (err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET' || err.code === 'ESOCKETTIMEDOUT' || err.code === 'ECONNABORTED') {
-	                    if (bulk.attemptNumber >= mythis.numberOfRetries) {
-	                        callback(new Error('Failed after ' + bulk.attemptNumber + ' retries on error = ' + err, err));
-	                    } else {
-	                        mythis._debug('Bulk #' + bulk.id + ' - failed on error: ' + err);
-	                        var sleepTimeMs = bulk.sleepUntilNextRetry;
-	                        bulk.sleepUntilNextRetry = bulk.sleepUntilNextRetry * 2;
-	                        bulk.attemptNumber++;
-	                        tryAgainIn(sleepTimeMs)
-	                    }
-	                }
-	                else {
-	                    callback(err);
-	                }
-	            }
-	            else {
-	                var responseCode = res.statusCode.toString();
-	                if (responseCode !== '200') {
-	                    callback(new Error('There was a problem with the request.\nResponse: ' + responseCode + ': ' + body.toString()));
-	                }
-	                else {
-	                    mythis._debug('Bulk #' + bulk.id + ' - sent successfully');
-	                    callback();
-	                }
-	            }
-
-	        });
-	    }
-	    catch (ex) {
-	        callback(ex);
-	    }
+	      } else {
+	        var responseCode = res.statusCode.toString();
+	        if (responseCode !== '200') {
+	          callback(new Error('There was a problem with the request.\nResponse: ' + responseCode + ': ' + body.toString()));
+	        } else {
+	          mythis._debug('Bulk #' + bulk.id + ' - sent successfully');
+	          callback();
+	        }
+	      }
+	    });
+	  } catch (ex) {
+	    callback(ex);
+	  }
 	};
-
 
 /***/ },
 /* 2 */
@@ -1393,145 +1376,43 @@ module.exports =
 /***/ function(module, exports) {
 
 	module.exports = {
-		"_args": [
-			[
-				{
-					"raw": "logzio-nodejs@0.4.2",
-					"scope": null,
-					"escapedName": "logzio-nodejs",
-					"name": "logzio-nodejs",
-					"rawSpec": "0.4.2",
-					"spec": "0.4.2",
-					"type": "version"
-				},
-				"/Users/derrick/git/auth0-logzio"
-			]
-		],
-		"_from": "logzio-nodejs@0.4.2",
-		"_id": "logzio-nodejs@0.4.2",
-		"_inCache": true,
-		"_location": "/logzio-nodejs",
-		"_nodeVersion": "6.2.2",
-		"_npmOperationalInternal": {
-			"host": "packages-12-west.internal.npmjs.com",
-			"tmp": "tmp/logzio-nodejs-0.4.2.tgz_1481923502068_0.5961509756743908"
+		"name": "auth0-logs-to-logzio",
+		"version": "0.0.1",
+		"description": "This extension will take all of your Auth0 logs and export them to LogZio.",
+		"main": "index.js",
+		"scripts": {
+			"build": "webpack"
 		},
-		"_npmUser": {
-			"name": "gillyb",
-			"email": "gillyb@gmail.com"
-		},
-		"_npmVersion": "3.9.5",
-		"_phantomChildren": {
-			"aws-sign2": "0.6.0",
-			"aws4": "1.6.0",
-			"bl": "1.1.2",
-			"caseless": "0.11.0",
-			"combined-stream": "1.0.5",
-			"extend": "3.0.0",
-			"forever-agent": "0.6.1",
-			"form-data": "2.0.0",
-			"har-validator": "2.0.6",
-			"hawk": "3.1.3",
-			"http-signature": "1.1.1",
-			"is-typedarray": "1.0.0",
-			"isstream": "0.1.2",
-			"json-stringify-safe": "5.0.1",
-			"mime-types": "2.1.14",
-			"node-uuid": "1.4.7",
-			"oauth-sign": "0.8.2",
-			"qs": "6.2.0",
-			"stringstream": "0.0.5",
-			"tough-cookie": "2.3.2",
-			"tunnel-agent": "0.4.3"
-		},
-		"_requested": {
-			"raw": "logzio-nodejs@0.4.2",
-			"scope": null,
-			"escapedName": "logzio-nodejs",
-			"name": "logzio-nodejs",
-			"rawSpec": "0.4.2",
-			"spec": "0.4.2",
-			"type": "version"
-		},
-		"_requiredBy": [
-			"/"
-		],
-		"_resolved": "https://registry.npmjs.org/logzio-nodejs/-/logzio-nodejs-0.4.2.tgz",
-		"_shasum": "a848b99469ceb929f124317b291d4e5475c7c88a",
-		"_shrinkwrap": null,
-		"_spec": "logzio-nodejs@0.4.2",
-		"_where": "/Users/derrick/git/auth0-logzio",
-		"author": {
-			"name": "Gilly Barr",
-			"email": "gilly@logz.io"
-		},
-		"bugs": {
-			"url": "https://github.com/logzio/logzio-nodejs/issues"
-		},
-		"contributors": [
-			{
-				"name": "Gilly Barr",
-				"email": "gillyb@gmail.com"
-			},
-			{
-				"name": "Asaf Mesika",
-				"email": "asaf.mesika@gmail.com"
-			}
-		],
-		"dependencies": {
-			"json-stringify-safe": "5.0.x",
-			"lodash.assign": "4.2.0",
-			"request": "2.75.0"
-		},
-		"description": "A nodejs implementation for sending logs to Logz.IO cloud service",
-		"devDependencies": {
-			"assert": "^1.3.0",
-			"async": "1.4.2",
-			"mocha": "^2.3.3",
-			"nock": "^2.13.0",
-			"should": "^7.1.0",
-			"sinon": "^1.17.1"
-		},
-		"directories": {},
-		"dist": {
-			"shasum": "a848b99469ceb929f124317b291d4e5475c7c88a",
-			"tarball": "https://registry.npmjs.org/logzio-nodejs/-/logzio-nodejs-0.4.2.tgz"
-		},
-		"engines": {
-			"node": ">= 0.8.0"
-		},
-		"gitHead": "615e2f20ad281594f27a3e591c24a22c81565662",
-		"homepage": "https://github.com/logzio/logzio-nodejs#readme",
-		"keywords": [
-			"cloud computing",
-			"log analytics",
-			"api",
-			"logging",
-			"logzio"
-		],
-		"license": "(Apache-2.0)",
-		"main": "./lib/logzio-nodejs",
-		"maintainers": [
-			{
-				"name": "asafm",
-				"email": "asaf.mesika@gmail.com"
-			},
-			{
-				"name": "gillyb",
-				"email": "gillyb@gmail.com"
-			}
-		],
-		"name": "logzio-nodejs",
-		"optionalDependencies": {},
-		"readme": "ERROR: No README data found!",
 		"repository": {
 			"type": "git",
-			"url": "git+https://github.com/logzio/logzio-nodejs.git"
+			"url": "git+https://github.com/platypython/auth0-logz.git"
 		},
-		"scripts": {
-			"test": "mocha"
+		"author": "boudwin@divvypay.com",
+		"license": "MIT",
+		"bugs": {
+			"url": "https://github.com/platypython/auth0-logz/issues"
 		},
-		"version": "0.4.2"
+		"homepage": "https://github.com/platypython/auth0-logz#readme",
+		"dependencies": {
+			"async": "1.0.0",
+			"express": "4.14.0",
+			"lru-memoizer": "^1.2.0",
+			"moment": "2.11.2",
+			"useragent": "2.1.6",
+			"webtask-tools": "^1.3.0",
+			"request": "^2.56.0"
+		},
+		"devDependencies": {
+			"babel-core": "^6.5.1",
+			"babel-loader": "^6.2.2",
+			"babel-preset-es2015": "^6.5.0",
+			"babel-preset-react": "^6.5.0",
+			"json-loader": "^0.5.4",
+			"lodash": "^4.3.0",
+			"on-build-webpack": "^0.1.0",
+			"sync-request": "^3.0.0",
+			"webpack": "^1.12.13"
+		}
 	};
 
 /***/ },

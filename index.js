@@ -1,4 +1,4 @@
-const Logzio = require('.libs/logzio-nodejs.js');
+const Logzio = require('./libs/logzio-nodejs');
 const async = require('async');
 const moment = require('moment');
 const useragent = require('useragent');
