@@ -1,4 +1,4 @@
-const Logzio = require('./libs/logzio-nodejs');
+const Logzio = require('logzio-nodejs');
 const async = require('async');
 const moment = require('moment');
 const useragent = require('useragent');
@@ -26,8 +26,7 @@ function lastLogCheckpoint(req, res) {
     const logzio = Logzio.createLogger({
       token: ctx.data.LOGZIO_API_TOKEN,
       type: ctx.data.LOGZIO_LOG_TYPE,
-      protocol: ctx.data.LOGZIO_PROTOCOL,
-      debug: true
+      protocol: ctx.data.LOGZIO_PROTOCOL
     });
 
     // Start the process.
@@ -86,16 +85,18 @@ function lastLogCheckpoint(req, res) {
         console.log(`Sending ${context.logs.length}`);
 
         // logzio
-        logzio.log(context.logs, (err) => {
-          if (err) {
-            console.log('Error sending logs to LogZio', err);
-            return callback(err);
-          }
+        context.logs.forEach(function (log_line) {
 
-          console.log('Upload complete.');
+          logzio.log(log_line, (err) => {
+            if (err) {
+              console.log('Error sending logs to LogZio', err);
+              return callback(err);
+            }
 
-          return callback(null, context);
+            return callback(null, context);
+          });
         });
+        console.log('Upload complete.');
       }
     ], function (err, context) {
       if (err) {
