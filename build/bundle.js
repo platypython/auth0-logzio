@@ -136,18 +136,20 @@ module.exports =
 	    }, function (context, callback) {
 	      console.log('Sending ' + context.logs.length);
 
-	      // logzio
-	      context.logs.forEach(function (log_line) {
+	      if (context.logs.length > 0) {
+	        // logzio
+	        context.logs.forEach(function (log_line) {
+	          logzio.log(log_line, function (err) {
+	            if (err) {
+	              console.log('Error sending logs to LogZio', err);
+	              return callback(err);
+	            }
 
-	        logzio.log(log_line, function (err) {
-	          if (err) {
-	            console.log('Error sending logs to LogZio', err);
-	            return callback(err);
-	          }
-
-	          return callback(null, context);
+	            return callback(null, context);
+	          });
 	        });
-	      });
+	      }
+	      logzio.close();
 	      console.log('Upload complete.');
 	    }], function (err, context) {
 	      if (err) {
