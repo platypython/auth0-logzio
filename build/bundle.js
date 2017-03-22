@@ -77,12 +77,6 @@ module.exports =
 	    var startFromId = ctx.data.START_FROM ? ctx.data.START_FROM : null;
 	    var startCheckpointId = typeof data === 'undefined' ? startFromId : data.checkpointId;
 
-	    var logzio = Logzio.createLogger({
-	      token: ctx.data.LOGZIO_API_TOKEN,
-	      type: ctx.data.LOGZIO_LOG_TYPE,
-	      protocol: ctx.data.LOGZIO_PROTOCOL
-	    });
-
 	    // Start the process.
 	    async.waterfall([function (callback) {
 	      var getLogs = function getLogs(context) {
@@ -136,18 +130,17 @@ module.exports =
 	    }, function (context, callback) {
 	      console.log('Sending ' + context.logs.length);
 	      if (context.logs.length > 0) {
+	        var logzio = Logzio.createLogger({
+	          token: ctx.data.LOGZIO_API_TOKEN,
+	          type: ctx.data.LOGZIO_LOG_TYPE,
+	          protocol: ctx.data.LOGZIO_PROTOCOL
+	        });
+
 	        context.logs.forEach(function (entry) {
 	          logzio.log(entry);
 	        });
-	        logzio.close(function (err, resp, body) {
-	          console.log("Response from LogZio:", body);
-	          if (err) {
-	            return callback({ error: err, message: 'Error sending logs to LogZio' });
-	          }
-
-	          console.log('Upload complete.');
-	          return callback(null, context);
-	        });
+	        logzio.close();
+	        return callback(null, context);
 	      } else {
 	        // no logs, just callback
 	        console.log('Upload complete.');
