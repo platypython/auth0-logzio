@@ -83,23 +83,24 @@ function lastLogCheckpoint(req, res) {
       },
       (context, callback) => {
         console.log(`Sending ${context.logs.length}`);
-
         if (context.logs.length > 0) {
-          // logzio
-          context.logs.forEach(function (log_line) {
-            logzio.log(log_line, (err) => {
-              if (err) {
-                console.log('Error sending logs to LogZio', err);
-                return callback(err);
-              }
-
-              return callback(null, context);
-            });
-
+          context.logs.forEach(function (entry) {
+            logzio.log(entry);
           });
+          logzio.close(function(err, resp, body) {
+            console.log("Response from LogZio:", body);
+            if (err) {
+              return callback({ error: err, message: 'Error sending logs to LogZio' });
+            }
+
+            console.log('Upload complete.');
+            return callback(null, context);
+          });
+        } else {
+          // no logs, just callback
+          console.log('Upload complete.');
+          return callback(null, context);
         }
-        logzio.close();
-        console.log('Upload complete.');
       }
     ], function (err, context) {
       if (err) {
